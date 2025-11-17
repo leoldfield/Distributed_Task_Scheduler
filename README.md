@@ -62,4 +62,4 @@ Beyond computer science, this project touches:
 ## Setup & Usage
 1. Install dependencies:
 ```bash
-pip install playsound
+pip install playsound==1.2.2

@@ -1,16 +1,47 @@
-# This is a sample Python script.
+import threading
+import time
+from server import run_server
+from client import TaskClient
+import os
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+if __name__ == "__main__":
 
+    # Start server
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
+    time.sleep(1)
+    print("[MAIN] Server is up and running")
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+    # Create clients
+    clients = []
+    for i in range(3):
+        c = TaskClient()
+        c.register()
+        threading.Thread(target=c.run_heartbeat, daemon=True).start()
+        clients.append(c)
 
+    print(f"[MAIN] {len(clients)} clients registered")
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('Hello World!')
+    # Submit and schedule tasks
+    tasks = [
+        {"name": "Task A"},
+        {"name": "Task B"},
+        {"name": "Task C"}
+    ]
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    # define thread
+    task_threads = []
+
+    for i, task in enumerate(tasks):
+        client = clients[i % len(clients)]
+        client.submit_task(task)
+        print(f"[MAIN] About to schedule task {task['name']}")
+        t = client.schedule_task(task["name"], 3 + i)
+        task_threads.append(t)
+        print(f"[MAIN] Scheduled thread for {task['name']}")
+
+    # Wait for threads
+    for t in task_threads:
+        t.join()
+
+    print("[MAIN] All tasks should have triggered sounds")
