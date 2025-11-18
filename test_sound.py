@@ -1,8 +1,12 @@
 import time
-from playsound import playsound
+import simpleaudio as sa
 
 print("Scheduling sound in 3 seconds...")
 time.sleep(3)
 print("Playing sound now!")
-playsound('notification.mp3')
+
+wave_obj = sa.WaveObject.from_wave_file("notification.wav")
+play_obj = wave_obj.play()
+play_obj.wait_done()
+
 print("Done.")

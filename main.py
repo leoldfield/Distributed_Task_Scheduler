@@ -34,9 +34,11 @@ if __name__ == "__main__":
 
     for i, task in enumerate(tasks):
         client = clients[i % len(clients)]
-        client.submit_task(task)
-        print(f"[MAIN] About to schedule task {task['name']}")
-        t = client.schedule_task(task["name"], 3 + i)
+        #schedule 3_i seconds from now
+        scheduled_time = time.time() + (3 + i)
+        client.submit_task(task, scheduled_time=scheduled_time)
+        print(f"[MAIN] About to schedule task {task['name']} at {scheduled_time} ({time.ctime(scheduled_time)})")
+        t = client.schedule_task(task["name"], scheduled_time)
         task_threads.append(t)
         print(f"[MAIN] Scheduled thread for {task['name']}")
 

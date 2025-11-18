@@ -1,6 +1,8 @@
 import json
 import threading
 from socket import *
+from datetime import datetime
+import time
 
 HOST = 'localhost'
 PORT = 12345
@@ -15,7 +17,7 @@ def handle_client(conn, addr):
     global next_client_id, next_task_id
     client_id = None
     try:
-        data = conn.recv(1024)
+        data = conn.recv(4096)
         if not data:
             return
         message = json.loads(data.decode())
@@ -28,29 +30,51 @@ def handle_client(conn, addr):
             print(f"[SERVER] Client {client_id} registered from {addr}")
 
         while True:
-            data = conn.recv(1024)
+            data = conn.recv(4096)
             if not data:
                 break
-            message = json.loads(data.decode())
-            if message.get("action") == "submit_task":
-                task = message.get("task")
+            try:
+                message = json.loads(data.decode())
+            except Exception as e:
+                conn.send(json.dumps({"status": "error", "error": "invalid_json"}).encode())
+                continue 
+
+            action = message.get("action")
+
+            #keeps track of when each task is scheduled
+            if action == "submit_task":
+                task = message.get("task", {})
                 with lock:
                     task_id = next_task_id
                     next_task_id += 1
                     task["client_id"] = client_id
+                    # store the scheduled time
+                    task["scheduled_time"] = message.get("scheduled_time")
                     tasks[task_id] = task
                 conn.send(json.dumps({"status": "ok", "task_id": task_id}).encode())
                 print(f"[SERVER] Task submitted: {task}, assigned to client {client_id}")
-            elif message.get("action") == "get_tasks":
-                client_tasks = {tid: t for tid, t in tasks.items() if t["client_id"] == client_id}
+
+            elif action == "get_tasks":
+                with lock:
+                    client_tasks = {tid: t for tid, t in tasks.items() if t.get("client_id") == client_id}
                 conn.send(json.dumps({"status": "ok", "tasks": client_tasks}).encode())
+
+            elif action == "heartbeat":
+                conn.send(json.dumps({"status": "ok"}).encode())
+
+            else:
+                conn.send(json.dumps({"status": "error", "error": f"unknown_action {action}"}).encode())
+
     except Exception as e:
         print(f"[SERVER] Error: {e}")
     finally:
         if client_id:
             with lock:
                 clients.pop(client_id, None)
-        conn.close()
+        try:
+            conn.close()
+        except:
+            pass
         print(f"[SERVER] Connection with {addr} closed")
 
 def run_server():
