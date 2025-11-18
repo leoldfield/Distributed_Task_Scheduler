@@ -63,3 +63,13 @@ Beyond computer science, this project touches:
 1. Install dependencies:
 ```bash
 pip install playsound==1.2.2
+(If on linux, pip install libasound2-dev libjack-jackd2-dev if on linux)
+pip install simpleaudio==1.0.4
+```
+
+2. Testing
+```bash
+To test out the task creation and audio, run python3 main.py
+
+
+
