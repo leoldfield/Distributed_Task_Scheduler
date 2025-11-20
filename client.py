@@ -107,3 +107,14 @@ class TaskClient:
                     print(f"[CLIENT {self.client_id}] Heartbeat error, stopping heartbeats: {e}")
                     break
             time.sleep(HEARTBEAT_INTERVAL)
+
+if __name__ == "__main__":
+    c = TaskClient()
+    c.register()
+
+    hb = threading.Thread(target=c.run_heartbeat, daemon=True)
+    hb.start()
+
+    while True:
+        time.sleep(1)
+        
