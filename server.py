@@ -13,6 +13,12 @@ next_client_id = 1
 next_task_id = 1
 lock = threading.Lock()
 
+HEARTBEAT_TIMEOUT = 15  # seconds after client is considered dead
+SCHEDULER_INTERVAL = 1  # seconds in how often housekeeping runs
+
+def now_ts():
+    return time.time()
+
 def handle_client(conn, addr):
     global next_client_id, next_task_id
     client_id = None
@@ -25,9 +31,12 @@ def handle_client(conn, addr):
             with lock:
                 client_id = next_client_id
                 next_client_id += 1
-                clients[client_id] = conn
+                clients[client_id] = {"conn": conn, "addr": addr, "last_heartbeat": now_ts()}
             conn.send(json.dumps({"status": "ok", "client_id": client_id}).encode())
             print(f"[SERVER] Client {client_id} registered from {addr}")
+        else:
+            conn.send(json.dumps({"status": "error", "error": "not_registered"}).encode())
+            return
 
         while True:
             data = conn.recv(4096)
@@ -44,12 +53,13 @@ def handle_client(conn, addr):
             #keeps track of when each task is scheduled
             if action == "submit_task":
                 task = message.get("task", {})
+                scheduled_time = message.get("scheduled_time")  # epoch seconds (float) or None
                 with lock:
                     task_id = next_task_id
                     next_task_id += 1
                     task["client_id"] = client_id
-                    # store the scheduled time
-                    task["scheduled_time"] = message.get("scheduled_time")
+                    task["scheduled_time"] = scheduled_time
+                    task["submitted_at"] = now_ts()
                     tasks[task_id] = task
                 conn.send(json.dumps({"status": "ok", "task_id": task_id}).encode())
                 print(f"[SERVER] Task submitted: {task}, assigned to client {client_id}")
@@ -60,6 +70,10 @@ def handle_client(conn, addr):
                 conn.send(json.dumps({"status": "ok", "tasks": client_tasks}).encode())
 
             elif action == "heartbeat":
+                # Update last_heartbeat timestamp
+                with lock:
+                    if client_id in clients:
+                        clients[client_id]["last_heartbeat"] = now_ts()
                 conn.send(json.dumps({"status": "ok"}).encode())
 
             else:
@@ -77,12 +91,52 @@ def handle_client(conn, addr):
             pass
         print(f"[SERVER] Connection with {addr} closed")
 
+def scheduler_housekeeping():
+    """
+    Background thread:
+     - Logs tasks whose scheduled_time passed but haven't been fetched yet.
+     - Removes clients that timed out (no heartbeat).
+    """
+    while True:
+        time.sleep(SCHEDULER_INTERVAL)
+        now = now_ts()
+
+        # Detect overdue tasks
+        overdue = []
+        with lock:
+            for tid, t in list(tasks.items()):
+                st = t.get("scheduled_time")
+                if st is not None and st <= now:
+                    overdue.append((tid, t))
+        if overdue:
+            print(f"[SCHEDULER] Overdue tasks waiting to be fetched: {[tid for tid, _ in overdue]}")
+
+        # Remove dead clients
+        with lock:
+            dead = []
+            for cid, meta in list(clients.items()):
+                last = meta.get("last_heartbeat", 0)
+                if now - last > HEARTBEAT_TIMEOUT:
+                    dead.append(cid)
+            for cid in dead:
+                meta = clients.pop(cid, None)
+                if meta:
+                    try:
+                        meta["conn"].close()
+                    except:
+                        pass
+                    print(f"[SCHEDULER] Removed dead client {cid}")
+
 def run_server():
     print(f"[SERVER] Listening on {HOST}:{PORT}...")
     sock = socket(AF_INET, SOCK_STREAM)
     sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
     sock.bind((HOST, PORT))
     sock.listen(5)
+
+    # Start housekeeping thread
+    threading.Thread(target=scheduler_housekeeping, daemon=True).start()
+    
     while True:
         conn, addr = sock.accept()
         threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()

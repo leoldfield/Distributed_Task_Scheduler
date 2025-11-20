@@ -9,6 +9,7 @@ from datetime import datetime
 HOST = 'localhost'
 PORT = 12345
 HEARTBEAT_INTERVAL = 5
+POLL_INTERVAL = 2   # seconds for how often server is polled for due tasks
 
 class TaskClient:
     def __init__(self):
@@ -16,6 +17,7 @@ class TaskClient:
         self.sock = socket(AF_INET, SOCK_STREAM)
         self.sock.connect((HOST, PORT))
         self.lock = threading.Lock()
+        self.running = True
 
     def send_request(self, message):
         with self.lock:
@@ -45,6 +47,14 @@ class TaskClient:
     def get_tasks(self):
         response = self.send_request({"action": "get_tasks"})
         print(f"[CLIENT] Current tasks: {response}")
+        return response
+    
+    def fetch_due(self):
+        """
+        Poll the server for tasks that are due for this client.
+        Server will remove and return tasks that should be executed now, or had no scheduled_time.
+        """
+        response = self.send_request({"action": "fetch_due"})
         return response
     
     def play_sound(self):
