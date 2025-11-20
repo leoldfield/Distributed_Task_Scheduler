@@ -13,7 +13,7 @@ next_client_id = 1
 next_task_id = 1
 lock = threading.Lock()
 
-HEARTBEAT_TIMEOUT = 15  # seconds after client is considered dead
+HEARTBEAT_TIMEOUT = 2  # seconds after client is considered dead
 SCHEDULER_INTERVAL = 1  # seconds in how often housekeeping runs
 
 def now_ts():
@@ -74,6 +74,7 @@ def handle_client(conn, addr):
                 with lock:
                     if client_id in clients:
                         clients[client_id]["last_heartbeat"] = now_ts()
+                print(f"[SERVER] Heartbeat received from client {client_id}")
                 conn.send(json.dumps({"status": "ok"}).encode())
 
             else:
@@ -126,6 +127,8 @@ def scheduler_housekeeping():
                     except:
                         pass
                     print(f"[SCHEDULER] Removed dead client {cid}")
+        with lock:
+            print(f"[SCHEDULER] Active clients: {list(clients.keys())}, Total tasks: {len(tasks)}")
 
 def run_server():
     print(f"[SERVER] Listening on {HOST}:{PORT}...")

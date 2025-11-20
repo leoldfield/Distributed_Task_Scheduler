@@ -8,7 +8,7 @@ from datetime import datetime
 
 HOST = 'localhost'
 PORT = 12345
-HEARTBEAT_INTERVAL = 5
+HEARTBEAT_INTERVAL = 1  # seconds between heartbeats
 POLL_INTERVAL = 2   # seconds for how often server is polled for due tasks
 
 class TaskClient:
@@ -99,10 +99,11 @@ class TaskClient:
         return t
 
     def run_heartbeat(self):
-        while True:
+        while self.running:
             if self.client_id:
                 try:
                     self.send_request({"action": "heartbeat"})
+                    print(f"[CLIENT {self.client_id}] Sent heartbeat")
                 except Exception as e:
                     print(f"[CLIENT {self.client_id}] Heartbeat error, stopping heartbeats: {e}")
                     break
