@@ -59,6 +59,35 @@ Beyond computer science, this project touches:
 
 ---
 
+## Cloud Deployment
+
+The distributed task scheduler can be deployed on a cloud server such as AWS EC2 to allow multiple clients to connect remotely. Below is the standard deployment process:
+
+After connecting to the EC2 instance, install Python, clone the repository, install the required packages, and run `server.py`. Clients can then connect using the EC2 public IP address.
+
+---
+
+### AWS EC2 Setup
+1. Launch an Ubuntu 22.04 EC2 instance (t2.micro).
+2. Open ports in the security group:
+   - 22 (SSH)
+   - 5000 (server communication)
+3. Connect to the server:
+
+---
+
+### Additional Future Extensions
+
+- **TLS Security:** Encrypt client–server communication to enhance privacy and integrity.
+- **Recurring Tasks:** Add support for repeating tasks (daily, weekly, hourly).
+- **Calendar Integration:** Import reminders from Google Calendar or Outlook.
+- **Message Brokers:** Replace direct socket messaging with RabbitMQ or Kafka for scalability.
+- **Docker Deployment:** Containerize the server to simplify deployment and scaling.
+- **Kubernetes / ECS:** Use orchestration platforms for automated scaling and high availability.
+
+
+---
+
 ## Setup & Usage
 1. Install dependencies:
 ```bash
