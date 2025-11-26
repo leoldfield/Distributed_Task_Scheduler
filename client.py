@@ -3,7 +3,7 @@ import os
 import threading
 import time
 from socket import *
-import simpleaudio as sa
+#import simpleaudio as sa
 from datetime import datetime
 
 HOST = 'localhost'
@@ -18,8 +18,15 @@ class TaskClient:
         self.sock.connect((HOST, PORT))
         self.lock = threading.Lock()
         self.running = True
+        self.slept = False  #for crash testing purposes
 
     def send_request(self, message):
+        if self.client_id == 1:     #simulate thread crash on client 1
+            print("\n-------- Client " + str(self.client_id) + " sleeping --------\n")
+            while self.client_id == 1 and self.slept == False:
+                time.sleep(4)   
+                self.slept = True 
+
         with self.lock:
             self.sock.send(json.dumps(message).encode())
             response = self.sock.recv(4096)
