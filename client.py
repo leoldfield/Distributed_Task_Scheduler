@@ -3,7 +3,8 @@ import os
 import threading
 import time
 from socket import *
-#import simpleaudio as sa
+from urllib import response
+import simpleaudio as sa
 from datetime import datetime
 
 HOST = 'localhost'
@@ -21,18 +22,23 @@ class TaskClient:
         self.slept = False  #for crash testing purposes
 
     def send_request(self, message):
-        if self.client_id == 1:     #simulate thread crash on client 1
-            print("\n-------- Client " + str(self.client_id) + " sleeping --------\n")
-            while self.client_id == 1 and self.slept == False:
-                time.sleep(4)   
-                self.slept = True 
-
+        """
+        Send a request safely. Only HEARTBEAT messages may be skipped to simulate a crash.
+        """
+        if not self.running:
+            return {"status": "error", "error": "client_crashed"}
+        
+        if self.client_id == 1 and message.get("action") == "heartbeat" and not self.slept:
+            self.simulate_crash()  # actually invoke the crash
+            raise ConnectionResetError("Simulated heartbeat crash")
+        
         with self.lock:
             self.sock.send(json.dumps(message).encode())
             response = self.sock.recv(4096)
+
         try:
             return json.loads(response.decode())
-        except:
+        except: 
             return {"status": "error", "error": "invalid_response"}
 
     def register(self):
@@ -77,10 +83,12 @@ class TaskClient:
             play_obj = wave.play()
             #commented out so multiple tasks can play audio at nearly 
             # the same time without  other threads
-            # play_obj.wait_done()
+            # re-enabled, otherwise sound wouldnt fully play
+            play_obj.wait_done()
             print(f"[CLIENT {self.client_id}] Played sound successfully")
         except Exception as e:
             print(f"[CLIENT {self.client_id}] Error playing sound: {e}")
+            self.running = False
 
     def schedule_task(self, task_name, scheduled_time):
         """
@@ -115,6 +123,22 @@ class TaskClient:
                     print(f"[CLIENT {self.client_id}] Heartbeat error, stopping heartbeats: {e}")
                     break
             time.sleep(HEARTBEAT_INTERVAL)
+
+    def simulate_crash(self):
+        """
+        Immediately stops all client activity and closes socket.
+        Tasks should then be reassigned by the scheduler.
+        """
+        print(f"\n***** CLIENT {self.client_id} CRASHED *****\n")
+        self.running = False
+        try:
+            self.sock.shutdown(SHUT_RDWR)
+        except:
+            pass
+        try:
+            self.sock.close()
+        except:
+            pass
 
 if __name__ == "__main__":
     c = TaskClient()

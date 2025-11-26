@@ -94,9 +94,8 @@ def handle_client(conn, addr):
 
 def scheduler_housekeeping():
     """
-    Background thread:
-     - Logs tasks whose scheduled_time passed but haven't been fetched yet.
-     - Removes clients that timed out (no heartbeat).
+    Detect overdue tasks and remove dead clients.
+    Reassign tasks from dead clients to active clients.
     """
     while True:
         time.sleep(SCHEDULER_INTERVAL)
@@ -105,28 +104,41 @@ def scheduler_housekeeping():
         # Detect overdue tasks
         overdue = []
         with lock:
-            for tid, t in list(tasks.items()):
-                st = t.get("scheduled_time")
-                if st is not None and st <= now:
-                    overdue.append((tid, t))
-        if overdue:
-            print(f"[SCHEDULER] Overdue tasks waiting to be fetched: {[tid for tid, _ in overdue]}")
+            # --- Detect overdue tasks ---
+            overdue = [(tid, t) for tid, t in tasks.items()
+                       if t.get("scheduled_time") is not None and t["scheduled_time"] <= now]
+            if overdue:
+                print(f"[SCHEDULER] Overdue tasks waiting to be fetched: {[tid for tid, _ in overdue]}")
 
-        # Remove dead clients
-        with lock:
-            dead = []
-            for cid, meta in list(clients.items()):
-                last = meta.get("last_heartbeat", 0)
-                if now - last > HEARTBEAT_TIMEOUT:
-                    dead.append(cid)
-            for cid in dead:
+            # --- Detect dead clients ---
+            dead_clients = [cid for cid, meta in clients.items()
+                            if now - meta.get("last_heartbeat", 0) > HEARTBEAT_TIMEOUT]
+            
+            if dead_clients:
+                print(f"[SCHEDULER] Dead clients detected: {dead_clients}")
+            
+            # --- Reassign tasks from dead clients ---
+            for tid, t in tasks.items():
+                cid = t.get("client_id")
+                if cid in dead_clients:
+                    live_clients = [c for c in clients.keys() if c not in dead_clients]
+                    if live_clients:
+                        new_cid = live_clients[0]
+                        t["client_id"] = new_cid
+                        print(f"[SCHEDULER] Reassigned task {tid} from dead client {cid} to {new_cid}")
+                    else:
+                        print(f"[SCHEDULER] No active clients to reassign task {tid}")
+
+            # --- Remove dead clients after reassignment ---
+            for cid in dead_clients:
                 meta = clients.pop(cid, None)
                 if meta:
                     try:
                         meta["conn"].close()
                     except:
                         pass
-                    print(f"[SCHEDULER] Removed dead client {cid}")
+                print(f"[SCHEDULER] Removed dead client {cid}")
+
         with lock:
             print(f"[SCHEDULER] Active clients: {list(clients.keys())}, Total tasks: {len(tasks)}")
 
